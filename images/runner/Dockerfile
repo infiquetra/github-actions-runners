@@ -120,6 +120,9 @@ RUN apt-get clean && \
 # ============================================
 # Setup for runner user
 # ============================================
+# Give runner user ownership of Flutter SDK (required for cache writes)
+RUN chown -R runner:runner /opt/flutter
+
 USER runner
 
 # Set up uv for runner user
