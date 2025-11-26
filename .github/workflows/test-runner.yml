@@ -3,7 +3,7 @@ name: Test Self-Hosted Runner
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [master]
     paths:
       - '.github/workflows/test-runner.yml'
 

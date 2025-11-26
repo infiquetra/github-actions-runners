@@ -2,12 +2,12 @@ name: Build Runner Image
 
 on:
   push:
-    branches: [main]
+    branches: [master]
     paths:
       - 'images/runner/**'
       - '.github/workflows/build-runner-image.yml'
   pull_request:
-    branches: [main]
+    branches: [master]
     paths:
       - 'images/runner/**'
   workflow_dispatch:
