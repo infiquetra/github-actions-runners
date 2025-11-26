@@ -2,7 +2,7 @@
 # Deploy ARC (Actions Runner Controller) to MicroK8s Cluster
 #
 # Usage:
-#   ansible-playbook playbooks/deploy-arc.yml --vault-password-file ~/.vault_pass
+#   ansible-playbook playbooks/deploy-arc.yml --vault-password-file ~/.vault_pass.txt
 #
 # Tags:
 #   - controller: Deploy only the ARC controller
