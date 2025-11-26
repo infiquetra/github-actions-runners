@@ -126,6 +126,9 @@ USER runner
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/home/runner/.local/bin:$PATH"
 
+# Mark Flutter directory as safe for git (required when user changes)
+RUN git config --global --add safe.directory /opt/flutter
+
 # Pre-accept Flutter licenses (run as runner user)
 RUN yes | flutter doctor --android-licenses 2>/dev/null || true
 
