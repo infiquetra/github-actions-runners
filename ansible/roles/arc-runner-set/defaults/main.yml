@@ -1,0 +1,38 @@
+# Default variables for arc-runner-set role
+# These can be overridden in group_vars or playbook vars
+
+arc_runner_set:
+  chart_repo: "oci://ghcr.io/actions/actions-runner-controller-charts"
+  chart_name: "gha-runner-scale-set"
+  chart_version: "0.10.1"
+  release_name: "arc-runner-set"
+  namespace: "arc-runners"
+
+  # GitHub configuration
+  github_config_url: "https://github.com/infiquetra"
+  runner_scale_set_name: "infiquetra-arc-runner"
+
+  # Scaling
+  min_runners: 0
+  max_runners: 20
+
+  # Runner image
+  runner_image: "ghcr.io/infiquetra/arc-runner:latest"
+
+  # Resource allocation
+  resources:
+    requests:
+      cpu: "1"
+      memory: "2Gi"
+    limits:
+      cpu: "4"
+      memory: "8Gi"
+
+storage:
+  storage_class: "openebs-triple-replica"
+  cache_size: "50Gi"
+
+# GitHub App credentials (should be in vault.yml)
+# github_app_id: ""
+# github_app_installation_id: ""
+# github_app_private_key: ""

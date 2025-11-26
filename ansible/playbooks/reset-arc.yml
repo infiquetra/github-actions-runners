@@ -1,0 +1,110 @@
+---
+# Reset/Remove ARC (Actions Runner Controller) from Kubernetes
+#
+# Usage:
+#   ansible-playbook playbooks/reset-arc.yml
+#
+# WARNING: This will remove all runners and the controller!
+# Runners will be unregistered from GitHub.
+
+- name: Remove ARC from Kubernetes
+  hosts: localhost
+  gather_facts: false
+
+  vars_files:
+    - ../group_vars/all/vars.yml
+
+  tasks:
+    - name: Confirm reset
+      ansible.builtin.pause:
+        prompt: |
+          WARNING: This will remove ARC and all runners!
+
+          The following will be deleted:
+          - Runner Scale Set ({{ arc_runner_set.release_name }})
+          - ARC Controller ({{ arc_controller.release_name }})
+          - Namespace: {{ arc_runner_set.namespace }}
+          - Namespace: {{ arc_controller.namespace }}
+          - All runner registrations in GitHub
+
+          Press ENTER to continue or Ctrl+C to abort
+      tags:
+        - confirm
+
+    - name: Uninstall Runner Scale Set Helm release
+      kubernetes.core.helm:
+        name: "{{ arc_runner_set.release_name }}"
+        release_namespace: "{{ arc_runner_set.namespace }}"
+        state: absent
+        wait: true
+      ignore_errors: true
+      tags:
+        - runner-set
+
+    - name: Wait for runner pods to terminate
+      kubernetes.core.k8s_info:
+        kind: Pod
+        namespace: "{{ arc_runner_set.namespace }}"
+      register: runner_pods
+      until: runner_pods.resources | length == 0
+      retries: 30
+      delay: 10
+      ignore_errors: true
+      tags:
+        - runner-set
+
+    - name: Uninstall ARC Controller Helm release
+      kubernetes.core.helm:
+        name: "{{ arc_controller.release_name }}"
+        release_namespace: "{{ arc_controller.namespace }}"
+        state: absent
+        wait: true
+      ignore_errors: true
+      tags:
+        - controller
+
+    - name: Delete arc-runners namespace
+      kubernetes.core.k8s:
+        state: absent
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ arc_runner_set.namespace }}"
+      ignore_errors: true
+      tags:
+        - namespaces
+
+    - name: Delete arc-systems namespace
+      kubernetes.core.k8s:
+        state: absent
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ arc_controller.namespace }}"
+      ignore_errors: true
+      tags:
+        - namespaces
+
+    - name: Display reset summary
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          ARC Reset Complete!
+          ============================================
+
+          Removed:
+          - Runner Scale Set: {{ arc_runner_set.release_name }}
+          - ARC Controller: {{ arc_controller.release_name }}
+          - Namespace: {{ arc_runner_set.namespace }}
+          - Namespace: {{ arc_controller.namespace }}
+
+          Note: Runner registrations should be automatically
+          removed from GitHub. If not, manually remove them at:
+          {{ arc_runner_set.github_config_url }}/settings/actions/runners
+
+          To redeploy:
+            ansible-playbook playbooks/deploy-arc.yml
+
+          ============================================

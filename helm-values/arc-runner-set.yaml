@@ -1,0 +1,123 @@
+# ARC Runner Scale Set Helm Values
+# Chart: gha-runner-scale-set
+# https://github.com/actions/actions-runner-controller
+
+# GitHub configuration (overridden by Ansible)
+# githubConfigUrl: "https://github.com/infiquetra"
+# githubConfigSecret: github-app-secret
+# runnerScaleSetName: "infiquetra-arc-runner"
+
+# Scaling configuration
+minRunners: 0
+maxRunners: 20
+
+# Container mode: dind (Docker-in-Docker) for Docker builds
+containerMode:
+  type: "dind"
+
+# Runner pod template
+template:
+  spec:
+    # Security context for the pod
+    securityContext:
+      fsGroup: 1001
+
+    # Init container to set up workspace permissions
+    initContainers:
+      - name: init-workspace
+        image: ghcr.io/actions/actions-runner:latest
+        command: ["sh", "-c", "chown -R 1001:1001 /home/runner/_work || true"]
+        volumeMounts:
+          - name: work
+            mountPath: /home/runner/_work
+        securityContext:
+          runAsUser: 0
+
+    containers:
+      # Main runner container
+      - name: runner
+        image: ghcr.io/infiquetra/arc-runner:latest
+        imagePullPolicy: Always
+        command: ["/home/runner/run.sh"]
+        env:
+          # Docker client configuration for DinD
+          - name: DOCKER_HOST
+            value: tcp://localhost:2376
+          - name: DOCKER_TLS_VERIFY
+            value: "1"
+          - name: DOCKER_CERT_PATH
+            value: /certs/client
+          # Runner configuration
+          - name: RUNNER_WORKDIR
+            value: /home/runner/_work
+        resources:
+          requests:
+            cpu: "1"
+            memory: "2Gi"
+          limits:
+            cpu: "4"
+            memory: "8Gi"
+        volumeMounts:
+          - name: work
+            mountPath: /home/runner/_work
+          - name: dind-certs
+            mountPath: /certs/client
+            readOnly: true
+
+      # Docker-in-Docker sidecar
+      - name: dind
+        image: docker:dind
+        securityContext:
+          privileged: true
+        env:
+          - name: DOCKER_TLS_CERTDIR
+            value: /certs
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "1Gi"
+          limits:
+            cpu: "2"
+            memory: "4Gi"
+        volumeMounts:
+          - name: work
+            mountPath: /home/runner/_work
+          - name: dind-certs
+            mountPath: /certs
+          - name: dind-storage
+            mountPath: /var/lib/docker
+
+    volumes:
+      # Workspace for builds
+      - name: work
+        emptyDir: {}
+      # TLS certificates for Docker client/daemon communication
+      - name: dind-certs
+        emptyDir: {}
+      # Docker storage (images, containers)
+      - name: dind-storage
+        emptyDir: {}
+
+    # Optional: tolerations for dedicated runner nodes
+    tolerations: []
+
+    # Optional: node selector
+    nodeSelector: {}
+
+# Listener pod configuration (receives webhook events)
+listenerTemplate:
+  spec:
+    containers:
+      - name: listener
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+
+# Controller configuration
+controllerServiceAccount:
+  namespace: arc-systems
+  name: arc-controller

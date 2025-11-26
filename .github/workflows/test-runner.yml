@@ -1,0 +1,153 @@
+name: Test Self-Hosted Runner
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/test-runner.yml'
+
+jobs:
+  test-python:
+    name: Test Python Environment
+    runs-on: infiquetra-arc-runner
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify Python version
+        run: |
+          echo "Python version:"
+          python3 --version
+          which python3
+
+      - name: Verify pip
+        run: |
+          echo "pip version:"
+          pip3 --version
+
+      - name: Test uv package manager
+        run: |
+          echo "uv version:"
+          uv --version
+
+          echo "Creating virtual environment with uv..."
+          uv venv test-venv
+          source test-venv/bin/activate
+
+          echo "Installing a package with uv..."
+          uv pip install requests
+
+          echo "Testing import..."
+          python -c "import requests; print('requests installed successfully')"
+
+          echo "Cleaning up..."
+          deactivate
+          rm -rf test-venv
+
+  test-aws-cli:
+    name: Test AWS CLI
+    runs-on: infiquetra-arc-runner
+    steps:
+      - name: Verify AWS CLI
+        run: |
+          echo "AWS CLI version:"
+          aws --version
+
+  test-dart-flutter:
+    name: Test Dart and Flutter
+    runs-on: infiquetra-arc-runner
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify Dart
+        run: |
+          echo "Dart version:"
+          dart --version
+          which dart
+
+      - name: Verify Flutter
+        run: |
+          echo "Flutter version:"
+          flutter --version
+          which flutter
+
+      - name: Run Flutter doctor
+        run: flutter doctor -v
+
+      - name: Create test Flutter app
+        run: |
+          flutter create test_app
+          cd test_app
+          echo "Running Flutter analyze..."
+          flutter analyze
+          echo "Cleaning up..."
+          cd ..
+          rm -rf test_app
+
+  test-nodejs:
+    name: Test Node.js
+    runs-on: infiquetra-arc-runner
+    steps:
+      - name: Verify Node.js
+        run: |
+          echo "Node.js version:"
+          node --version
+          which node
+
+      - name: Verify npm
+        run: |
+          echo "npm version:"
+          npm --version
+
+  test-docker:
+    name: Test Docker (DinD)
+    runs-on: infiquetra-arc-runner
+    steps:
+      - name: Verify Docker
+        run: |
+          echo "Docker version:"
+          docker --version
+
+      - name: Verify Docker info
+        run: docker info
+
+      - name: Test Docker build
+        run: |
+          echo "Creating test Dockerfile..."
+          cat > Dockerfile.test << 'DOCKEREOF'
+          FROM alpine:latest
+          RUN echo "Hello from Docker build!"
+          CMD ["echo", "Container running successfully!"]
+          DOCKEREOF
+
+          echo "Building image..."
+          docker build -t test-image:latest -f Dockerfile.test .
+
+          echo "Running container..."
+          docker run --rm test-image:latest
+
+          echo "Cleaning up..."
+          docker rmi test-image:latest
+          rm Dockerfile.test
+
+  summary:
+    name: Test Summary
+    runs-on: infiquetra-arc-runner
+    needs: [test-python, test-aws-cli, test-dart-flutter, test-nodejs, test-docker]
+    steps:
+      - name: All tests passed
+        run: |
+          echo "============================================"
+          echo "All runner tests passed successfully!"
+          echo "============================================"
+          echo ""
+          echo "Verified tools:"
+          echo "  - Python 3.12+ with uv"
+          echo "  - AWS CLI v2"
+          echo "  - Dart SDK"
+          echo "  - Flutter SDK"
+          echo "  - Node.js 20"
+          echo "  - Docker (Docker-in-Docker)"
+          echo ""
+          echo "Runner is ready for use!"
+          echo "============================================"

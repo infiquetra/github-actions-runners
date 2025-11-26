@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: runner-cache-pvc
+  namespace: arc-runners
+  labels:
+    app.kubernetes.io/name: arc-runners
+    app.kubernetes.io/component: storage
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: openebs-triple-replica
+  resources:
+    requests:
+      storage: 50Gi

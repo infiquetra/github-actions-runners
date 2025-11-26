@@ -1,0 +1,59 @@
+# ARC Controller Helm Values
+# Chart: gha-runner-scale-set-controller
+# https://github.com/actions/actions-runner-controller
+
+replicaCount: 2
+
+image:
+  repository: ghcr.io/actions/gha-runner-scale-set-controller
+  pullPolicy: IfNotPresent
+  # tag: defaults to chart appVersion
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+serviceAccount:
+  create: true
+  name: arc-controller
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+
+# Logging
+logLevel: info
+
+# Metrics (optional - for Prometheus)
+metrics:
+  controllerManagerAddr: ":8080"
+  listenerAddr: ":8081"
+  listenerEndpoint: "/metrics"
+
+# Leader election for HA
+leaderElection:
+  enabled: true
+
+# Priority class (optional)
+# priorityClassName: ""
+
+# Tolerations (optional - for dedicated controller nodes)
+tolerations: []
+
+# Node selector (optional)
+nodeSelector: {}
+
+# Affinity rules (optional - spread across nodes for HA)
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: gha-runner-scale-set-controller
+          topologyKey: kubernetes.io/hostname

@@ -1,0 +1,111 @@
+---
+# ARC Runner Set Deployment Tasks
+
+- name: Create arc-runners namespace
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ arc_runner_set.namespace }}"
+        labels:
+          app.kubernetes.io/name: arc-runners
+          app.kubernetes.io/component: runners
+  tags:
+    - runner-set
+    - namespaces
+
+- name: Verify GitHub App credentials are defined
+  ansible.builtin.assert:
+    that:
+      - github_app_id is defined
+      - github_app_installation_id is defined
+      - github_app_private_key is defined
+    fail_msg: |
+      GitHub App credentials are not defined.
+      Please create ansible/group_vars/all/vault.yml with:
+        - github_app_id
+        - github_app_installation_id
+        - github_app_private_key
+  tags:
+    - runner-set
+    - secrets
+
+- name: Create GitHub App secret
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: github-app-secret
+        namespace: "{{ arc_runner_set.namespace }}"
+      type: Opaque
+      stringData:
+        github_app_id: "{{ github_app_id }}"
+        github_app_installation_id: "{{ github_app_installation_id }}"
+        github_app_private_key: "{{ github_app_private_key }}"
+  tags:
+    - runner-set
+    - secrets
+
+- name: Create runner cache PVC
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: runner-cache-pvc
+        namespace: "{{ arc_runner_set.namespace }}"
+      spec:
+        accessModes:
+          - ReadWriteMany
+        storageClassName: "{{ storage.storage_class }}"
+        resources:
+          requests:
+            storage: "{{ storage.cache_size }}"
+  tags:
+    - runner-set
+    - storage
+
+- name: Deploy ARC Runner Scale Set via Helm
+  kubernetes.core.helm:
+    name: "{{ arc_runner_set.release_name }}"
+    chart_ref: "{{ arc_runner_set.chart_repo }}/{{ arc_runner_set.chart_name }}"
+    chart_version: "{{ arc_runner_set.chart_version }}"
+    release_namespace: "{{ arc_runner_set.namespace }}"
+    create_namespace: true
+    wait: true
+    wait_timeout: "5m"
+    values_files:
+      - "{{ playbook_dir }}/../helm-values/arc-runner-set.yaml"
+    values:
+      githubConfigUrl: "{{ arc_runner_set.github_config_url }}"
+      githubConfigSecret: github-app-secret
+      runnerScaleSetName: "{{ arc_runner_set.runner_scale_set_name }}"
+      minRunners: "{{ arc_runner_set.min_runners }}"
+      maxRunners: "{{ arc_runner_set.max_runners }}"
+  tags:
+    - runner-set
+    - helm
+
+- name: Display runner registration info
+  ansible.builtin.debug:
+    msg: |
+      ARC Runner Set deployed successfully!
+
+      Runner Scale Set Name: {{ arc_runner_set.runner_scale_set_name }}
+      GitHub Organization: {{ arc_runner_set.github_config_url }}
+      Min Runners: {{ arc_runner_set.min_runners }}
+      Max Runners: {{ arc_runner_set.max_runners }}
+
+      To use in workflows:
+        runs-on: {{ arc_runner_set.runner_scale_set_name }}
+
+      Check status:
+        kubectl get pods -n {{ arc_runner_set.namespace }}
+        kubectl get hra -n {{ arc_runner_set.namespace }}
+  tags:
+    - runner-set

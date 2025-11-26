@@ -1,0 +1,10 @@
+# Default variables for arc-controller role
+# These can be overridden in group_vars or playbook vars
+
+arc_controller:
+  chart_repo: "oci://ghcr.io/actions/actions-runner-controller-charts"
+  chart_name: "gha-runner-scale-set-controller"
+  chart_version: "0.10.1"
+  release_name: "arc-controller"
+  namespace: "arc-systems"
+  replicas: 2

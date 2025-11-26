@@ -1,0 +1,59 @@
+# Shared Variables for ARC Deployment
+# Sensitive credentials should be in vault.yml (Ansible Vault encrypted)
+
+# ===========================================
+# ARC Controller Configuration
+# ===========================================
+arc_controller:
+  chart_repo: "oci://ghcr.io/actions/actions-runner-controller-charts"
+  chart_name: "gha-runner-scale-set-controller"
+  chart_version: "0.10.1"
+  release_name: "arc-controller"
+  namespace: "arc-systems"
+  replicas: 2
+
+# ===========================================
+# Runner Scale Set Configuration
+# ===========================================
+arc_runner_set:
+  chart_repo: "oci://ghcr.io/actions/actions-runner-controller-charts"
+  chart_name: "gha-runner-scale-set"
+  chart_version: "0.10.1"
+  release_name: "arc-runner-set"
+  namespace: "arc-runners"
+
+  # GitHub configuration
+  github_config_url: "https://github.com/infiquetra"
+  runner_scale_set_name: "infiquetra-arc-runner"
+
+  # Scaling
+  min_runners: 0
+  max_runners: 20
+
+  # Runner image
+  runner_image: "ghcr.io/infiquetra/arc-runner:latest"
+
+  # Resource allocation (sized for Flutter builds)
+  resources:
+    requests:
+      cpu: "1"
+      memory: "2Gi"
+    limits:
+      cpu: "4"
+      memory: "8Gi"
+
+# ===========================================
+# Storage Configuration
+# ===========================================
+storage:
+  # Use OpenEBS triple replica for high availability
+  storage_class: "openebs-triple-replica"
+  cache_size: "50Gi"
+
+# ===========================================
+# GitHub App Credentials (reference to vault)
+# ===========================================
+# These values should be defined in vault.yml:
+# - github_app_id
+# - github_app_installation_id
+# - github_app_private_key

@@ -1,0 +1,61 @@
+---
+# ARC Controller Deployment Tasks
+
+- name: Create arc-systems namespace
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ arc_controller.namespace }}"
+        labels:
+          app.kubernetes.io/name: arc-controller
+          app.kubernetes.io/component: controller
+  tags:
+    - controller
+    - namespaces
+
+- name: Deploy ARC Controller via Helm
+  kubernetes.core.helm:
+    name: "{{ arc_controller.release_name }}"
+    chart_ref: "{{ arc_controller.chart_repo }}/{{ arc_controller.chart_name }}"
+    chart_version: "{{ arc_controller.chart_version }}"
+    release_namespace: "{{ arc_controller.namespace }}"
+    create_namespace: true
+    wait: true
+    wait_timeout: "5m"
+    values:
+      replicaCount: "{{ arc_controller.replicas }}"
+      resources:
+        limits:
+          cpu: 500m
+          memory: 512Mi
+        requests:
+          cpu: 100m
+          memory: 128Mi
+      serviceAccount:
+        create: true
+        name: arc-controller
+      podSecurityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+  tags:
+    - controller
+    - helm
+
+- name: Wait for controller pods to be ready
+  kubernetes.core.k8s_info:
+    kind: Pod
+    namespace: "{{ arc_controller.namespace }}"
+    label_selectors:
+      - "app.kubernetes.io/name=gha-runner-scale-set-controller"
+    wait: true
+    wait_sleep: 10
+    wait_timeout: 300
+    wait_condition:
+      type: Ready
+      status: "True"
+  tags:
+    - controller
+    - verify
