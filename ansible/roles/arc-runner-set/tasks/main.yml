@@ -1,111 +1,213 @@
 ---
 # ARC Runner Set Deployment Tasks
+#
+# Uses designated_host pattern to ensure tasks only run once
+# across the cluster, not on every host in the group.
 
-- name: Create arc-runners namespace
-  kubernetes.core.k8s:
-    state: present
-    definition:
-      apiVersion: v1
-      kind: Namespace
-      metadata:
-        name: "{{ arc_runner_set.namespace }}"
-        labels:
-          app.kubernetes.io/name: arc-runners
-          app.kubernetes.io/component: runners
-  tags:
-    - runner-set
-    - namespaces
+- name: Find the designated host
+  ansible.builtin.set_fact:
+    designated_host: '{{ (groups[arc_cluster] | sort)[0] }}'
 
-- name: Verify GitHub App credentials are defined
-  ansible.builtin.assert:
-    that:
-      - github_app_id is defined
-      - github_app_installation_id is defined
-      - github_app_private_key is defined
-    fail_msg: |
-      GitHub App credentials are not defined.
-      Please create ansible/group_vars/all/vault.yml with:
-        - github_app_id
-        - github_app_installation_id
-        - github_app_private_key
-  tags:
-    - runner-set
-    - secrets
+- name: Deploy ARC Runner Set (only on designated host)
+  when: inventory_hostname == designated_host
+  block:
+    - name: Create arc-runners namespace
+      become_user: "{{ kube_admin_user }}"
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ arc_runner_set.namespace }}"
+            labels:
+              app.kubernetes.io/name: arc-runners
+              app.kubernetes.io/component: runners
+      tags:
+        - runner-set
+        - namespaces
 
-- name: Create GitHub App secret
-  kubernetes.core.k8s:
-    state: present
-    definition:
-      apiVersion: v1
-      kind: Secret
-      metadata:
-        name: github-app-secret
-        namespace: "{{ arc_runner_set.namespace }}"
-      type: Opaque
-      stringData:
-        github_app_id: "{{ github_app_id }}"
-        github_app_installation_id: "{{ github_app_installation_id }}"
-        github_app_private_key: "{{ github_app_private_key }}"
-  tags:
-    - runner-set
-    - secrets
+    - name: Verify GitHub App credentials are defined
+      ansible.builtin.assert:
+        that:
+          - github_app_id is defined
+          - github_app_installation_id is defined
+          - github_app_private_key is defined
+        fail_msg: |
+          GitHub App credentials are not defined.
+          Please create ansible/group_vars/all/vault.yml with:
+            - github_app_id
+            - github_app_installation_id
+            - github_app_private_key
+      tags:
+        - runner-set
+        - secrets
 
-- name: Create runner cache PVC
-  kubernetes.core.k8s:
-    state: present
-    definition:
-      apiVersion: v1
-      kind: PersistentVolumeClaim
-      metadata:
-        name: runner-cache-pvc
-        namespace: "{{ arc_runner_set.namespace }}"
-      spec:
-        accessModes:
-          - ReadWriteMany
-        storageClassName: "{{ storage.storage_class }}"
-        resources:
-          requests:
-            storage: "{{ storage.cache_size }}"
-  tags:
-    - runner-set
-    - storage
+    - name: Create GitHub App secret
+      become_user: "{{ kube_admin_user }}"
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: github-app-secret
+            namespace: "{{ arc_runner_set.namespace }}"
+          type: Opaque
+          stringData:
+            github_app_id: "{{ github_app_id }}"
+            github_app_installation_id: "{{ github_app_installation_id }}"
+            github_app_private_key: "{{ github_app_private_key }}"
+      tags:
+        - runner-set
+        - secrets
 
-- name: Deploy ARC Runner Scale Set via Helm
-  kubernetes.core.helm:
-    name: "{{ arc_runner_set.release_name }}"
-    chart_ref: "{{ arc_runner_set.chart_repo }}/{{ arc_runner_set.chart_name }}"
-    chart_version: "{{ arc_runner_set.chart_version }}"
-    release_namespace: "{{ arc_runner_set.namespace }}"
-    create_namespace: true
-    wait: true
-    wait_timeout: "5m"
-    values_files:
-      - "{{ playbook_dir }}/../helm-values/arc-runner-set.yaml"
-    values:
-      githubConfigUrl: "{{ arc_runner_set.github_config_url }}"
-      githubConfigSecret: github-app-secret
-      runnerScaleSetName: "{{ arc_runner_set.runner_scale_set_name }}"
-      minRunners: "{{ arc_runner_set.min_runners }}"
-      maxRunners: "{{ arc_runner_set.max_runners }}"
-  tags:
-    - runner-set
-    - helm
+    - name: Create runner cache PVC
+      become_user: "{{ kube_admin_user }}"
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: PersistentVolumeClaim
+          metadata:
+            name: runner-cache-pvc
+            namespace: "{{ arc_runner_set.namespace }}"
+          spec:
+            accessModes:
+              - ReadWriteMany
+            storageClassName: "{{ storage.storage_class }}"
+            resources:
+              requests:
+                storage: "{{ storage.cache_size }}"
+      tags:
+        - runner-set
+        - storage
 
-- name: Display runner registration info
-  ansible.builtin.debug:
-    msg: |
-      ARC Runner Set deployed successfully!
+    - name: Deploy ARC Runner Scale Set via Helm
+      become_user: "{{ kube_admin_user }}"
+      kubernetes.core.helm:
+        name: "{{ arc_runner_set.release_name }}"
+        chart_ref: "{{ arc_runner_set.chart_repo }}/{{ arc_runner_set.chart_name }}"
+        chart_version: "{{ arc_runner_set.chart_version }}"
+        release_namespace: "{{ arc_runner_set.namespace }}"
+        create_namespace: true
+        wait: true
+        wait_timeout: "5m"
+        values:
+          githubConfigUrl: "{{ arc_runner_set.github_config_url }}"
+          githubConfigSecret: github-app-secret
+          runnerScaleSetName: "{{ arc_runner_set.runner_scale_set_name }}"
+          minRunners: "{{ arc_runner_set.min_runners }}"
+          maxRunners: "{{ arc_runner_set.max_runners }}"
+          # Docker-in-Docker container mode for Docker builds
+          containerMode:
+            type: "dind"
+          # Runner pod template
+          template:
+            spec:
+              securityContext:
+                fsGroup: 1001
+              initContainers:
+                - name: init-workspace
+                  image: ghcr.io/actions/actions-runner:latest
+                  command: ["sh", "-c", "chown -R 1001:1001 /home/runner/_work || true"]
+                  volumeMounts:
+                    - name: work
+                      mountPath: /home/runner/_work
+                  securityContext:
+                    runAsUser: 0
+              containers:
+                - name: runner
+                  image: "{{ arc_runner_set.runner_image }}"
+                  imagePullPolicy: Always
+                  command: ["/home/runner/run.sh"]
+                  env:
+                    - name: DOCKER_HOST
+                      value: tcp://localhost:2376
+                    - name: DOCKER_TLS_VERIFY
+                      value: "1"
+                    - name: DOCKER_CERT_PATH
+                      value: /certs/client
+                    - name: RUNNER_WORKDIR
+                      value: /home/runner/_work
+                  resources:
+                    requests:
+                      cpu: "{{ arc_runner_set.resources.requests.cpu }}"
+                      memory: "{{ arc_runner_set.resources.requests.memory }}"
+                    limits:
+                      cpu: "{{ arc_runner_set.resources.limits.cpu }}"
+                      memory: "{{ arc_runner_set.resources.limits.memory }}"
+                  volumeMounts:
+                    - name: work
+                      mountPath: /home/runner/_work
+                    - name: dind-certs
+                      mountPath: /certs/client
+                      readOnly: true
+                - name: dind
+                  image: docker:dind
+                  securityContext:
+                    privileged: true
+                  env:
+                    - name: DOCKER_TLS_CERTDIR
+                      value: /certs
+                  resources:
+                    requests:
+                      cpu: "500m"
+                      memory: "1Gi"
+                    limits:
+                      cpu: "2"
+                      memory: "4Gi"
+                  volumeMounts:
+                    - name: work
+                      mountPath: /home/runner/_work
+                    - name: dind-certs
+                      mountPath: /certs
+                    - name: dind-storage
+                      mountPath: /var/lib/docker
+              volumes:
+                - name: work
+                  emptyDir: {}
+                - name: dind-certs
+                  emptyDir: {}
+                - name: dind-storage
+                  emptyDir: {}
+              tolerations: []
+              nodeSelector: {}
+          # Listener pod configuration
+          listenerTemplate:
+            spec:
+              containers:
+                - name: listener
+                  resources:
+                    requests:
+                      cpu: 100m
+                      memory: 128Mi
+                    limits:
+                      cpu: 500m
+                      memory: 512Mi
+          # Controller service account reference
+          controllerServiceAccount:
+            namespace: "{{ arc_controller.namespace }}"
+            name: arc-controller
+      tags:
+        - runner-set
+        - helm
 
-      Runner Scale Set Name: {{ arc_runner_set.runner_scale_set_name }}
-      GitHub Organization: {{ arc_runner_set.github_config_url }}
-      Min Runners: {{ arc_runner_set.min_runners }}
-      Max Runners: {{ arc_runner_set.max_runners }}
+    - name: Display runner registration info
+      ansible.builtin.debug:
+        msg: |
+          ARC Runner Set deployed successfully!
 
-      To use in workflows:
-        runs-on: {{ arc_runner_set.runner_scale_set_name }}
+          Runner Scale Set Name: {{ arc_runner_set.runner_scale_set_name }}
+          GitHub Organization: {{ arc_runner_set.github_config_url }}
+          Min Runners: {{ arc_runner_set.min_runners }}
+          Max Runners: {{ arc_runner_set.max_runners }}
 
-      Check status:
-        kubectl get pods -n {{ arc_runner_set.namespace }}
-        kubectl get hra -n {{ arc_runner_set.namespace }}
-  tags:
-    - runner-set
+          To use in workflows:
+            runs-on: {{ arc_runner_set.runner_scale_set_name }}
+
+          Check status:
+            kubectl get pods -n {{ arc_runner_set.namespace }}
+            kubectl get hra -n {{ arc_runner_set.namespace }}
+      tags:
+        - runner-set

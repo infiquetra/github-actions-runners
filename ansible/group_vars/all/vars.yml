@@ -2,6 +2,12 @@
 # Sensitive credentials should be in vault.yml (Ansible Vault encrypted)
 
 # ===========================================
+# Cluster Configuration
+# ===========================================
+arc_cluster: "cluster"
+kube_admin_user: jefcox
+
+# ===========================================
 # ARC Controller Configuration
 # ===========================================
 arc_controller:
