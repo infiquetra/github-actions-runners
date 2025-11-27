@@ -24,7 +24,7 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest  # TODO: Change back to infiquetra-arc-runner after GHCR package is public
+    runs-on: infiquetra-arc-runner
     permissions:
       contents: read
       packages: write
