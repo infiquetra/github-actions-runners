@@ -10,7 +10,7 @@ on:
 jobs:
   test-python:
     name: Test Python Environment
-    runs-on: infiquetra-arc-runner
+    runs-on: [self-hosted, infiquetra-linux-x64]
     steps:
       - uses: actions/checkout@v4
 
@@ -46,7 +46,7 @@ jobs:
 
   test-aws-cli:
     name: Test AWS CLI
-    runs-on: infiquetra-arc-runner
+    runs-on: [self-hosted, infiquetra-linux-x64]
     steps:
       - name: Verify AWS CLI
         run: |
@@ -55,7 +55,7 @@ jobs:
 
   test-dart-flutter:
     name: Test Dart and Flutter
-    runs-on: infiquetra-arc-runner
+    runs-on: [self-hosted, infiquetra-linux-x64]
     steps:
       - uses: actions/checkout@v4
 
@@ -86,7 +86,7 @@ jobs:
 
   test-nodejs:
     name: Test Node.js
-    runs-on: infiquetra-arc-runner
+    runs-on: [self-hosted, infiquetra-linux-x64]
     steps:
       - name: Verify Node.js
         run: |
@@ -101,7 +101,7 @@ jobs:
 
   test-docker:
     name: Test Docker (DinD)
-    runs-on: infiquetra-arc-runner
+    runs-on: [self-hosted, infiquetra-linux-x64]
     steps:
       - name: Verify Docker
         run: |
@@ -132,7 +132,7 @@ jobs:
 
   summary:
     name: Test Summary
-    runs-on: infiquetra-arc-runner
+    runs-on: [self-hosted, infiquetra-linux-x64]
     needs: [test-python, test-aws-cli, test-dart-flutter, test-nodejs, test-docker]
     steps:
       - name: All tests passed
